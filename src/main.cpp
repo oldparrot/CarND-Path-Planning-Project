@@ -13,6 +13,89 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
+/*
+这种方式定义的结构体，使用时需要先声明<结构变量>
+typedef struct{
+  类型 变量名;
+} Student;
+Student x; // 声明变量
+-------------------------------------------
+typedef struct Node {
+  int data;
+  struct Node* next;
+} node;
+第一步：
+struct Node {
+  int data;
+  struct Node* next;
+};
+创建Node结构类型;
+第二步:
+typedef Node node; // 把Node数据类型命名为node
+-------------------------------------------
+struct Student {
+  类型 变量名;
+} 结构变量; // 声明变量
+-------------------------------------------
+struct Student {
+  类型 变量名;
+};
+struct Student x; // 声明变量
+*/
+typedef struct Vehicle {
+  int id;
+  double x;
+  double y;
+  double vx;
+  double vy;
+  double s;
+  double d;
+  double speed;
+} Vehicle;
+
+typedef struct Planner {
+  double target_d;
+  vector<Vehicle> obstacles;
+  Vehicle target_to_follow;
+  int following_target_id;
+  double dist_to_target;
+  Eigen::MatrixXd s_trajectories;
+  Eigen::VectorXd s_costs;
+  Eigen::MatrixXd d_trajectories;
+  Eigen::VectorXd d_costs;
+  bool obstacle_following;
+  bool feasible_traj_exist;
+  int optimal_s_id;
+  int optimal_d_id;
+  double minimal_cost;
+  int iters;
+} Planner;
+
+// get the lane id of ego car
+int getMyLane(double d0) {
+  int mylane = 1;
+  if (d0 > 0 && d0 <= 4) {
+    mylane = 0;
+  } else if (d0 > 4 && d0 <= 8) {
+    mylane = 1;
+  } else {
+    mylane = 2;
+  }
+  return mylane;
+}
+
+string hasData(string s) {
+  auto found_null = s.find("null");
+  auto b1 = s.find_first_of("[");
+  auto b2 = s.find_first_of("}");
+  if (found_null != string::npos) {
+    return "";
+  } else if (b1 != string::npos && b2 != string::npos) {
+    return s.substr(b1, b2 - b1 + 2);
+  }
+  return "";
+}
+
 int main() {
   uWS::Hub h;
 
@@ -50,8 +133,17 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
+  Eigen::VectorXd optimal_s_coeff(6);
+  Eigen::VectorXd optimal_d_coeff(6);
+  double s_cost = 999;
+  double d_cost = 999;
+  int step = 0;
+
+  int minus_max_s = 0;
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy]
+               &map_waypoints_dx,&map_waypoints_dy,
+               &optimal_s_coeff, &step, &max_s, &minus_max_s]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -97,8 +189,57 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
+          double pos_x;
+          double pos_y;
+          double pos_yaw;
 
+          double MPH2mps = 1.0 / 2.23694;
+          double max_speed = 43 * MPH2mps;
 
+          int prev_path_size = previous_path_x.size();
+          int max_s_waypoint = map_waypoints_s[map_waypoints_s.size() - 1];
+
+          step += 1;
+
+          int id_map_last = map_waypoints_x.size() - 1;
+          int _close_way_point_id = ClosestWaypoint(car_x, car_y, map_waypoints_x, map_waypoints_y);
+
+          int id_interp_start = _close_way_point_id - 5;
+          int id_interp_end = _close_way_point_id + 8;
+
+          vector<double> map_x_to_interp;
+          vector<double> map_y_to_interp;
+          vector<double> map_s_to_interp;
+
+          double _map_s;
+          double _map_x;
+          double _map_y;
+
+          for (int map_id = id_interp_start; map_id < id_interp_end; map_id++) {
+            // 存疑
+            if (map_id > id_map_last) {
+              int _map_id = map_id - id_map_last - 1;
+              _map_s = map_waypoints_s[_map_id] + max_s;
+              _map_x = map_waypoints_x[_map_id];
+              _map_y = map_waypoints_y[_map_id];
+            } 
+            // 存疑
+            else if(map_id < 0) {
+              int _map_id = id_map_last + map_id + 1;
+              _map_s = map_waypoints_s[_map_id] - max_s;
+              _map_x = map_waypoints_x[_map_id];              
+              _map_y = map_waypoints_y[_map_id];              
+            } else {
+              _map_s = map_waypoints_s[map_id];
+              _map_x = map_waypoints_x[map_id];
+              _map_y = map_waypoints_y[map_id];
+            }
+            map_s_to_interp.push_back(_map_s);
+            map_s_to_interp.push_back(_map_x);
+            map_s_to_interp.push_back(_map_y);
+          }
+
+          
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 

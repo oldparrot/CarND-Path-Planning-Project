@@ -1,0 +1,3 @@
+/media/meng/D/Code_2022/OLD_PARROT/CarND-Path-Planning-Project/build/CMakeFiles/rebuild_cache.dir
+/media/meng/D/Code_2022/OLD_PARROT/CarND-Path-Planning-Project/build/CMakeFiles/path_planning.dir
+/media/meng/D/Code_2022/OLD_PARROT/CarND-Path-Planning-Project/build/CMakeFiles/edit_cache.dir
