@@ -5,14 +5,18 @@
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/Dense"
 #include "helpers.h"
 #include "json.hpp"
 
+#include "spline.h"
+
 // for convenience
+using namespace Eigen;
+
 using nlohmann::json;
 using std::string;
 using std::vector;
-
 /*
 这种方式定义的结构体，使用时需要先声明<结构变量>
 typedef struct{
@@ -239,7 +243,106 @@ int main() {
             map_s_to_interp.push_back(_map_y);
           }
 
-          
+          tk::spline x_given_s;
+          tk::spline y_given_s;
+          x_given_s.set_points(map_s_to_interp, map_x_to_interp);
+          y_given_s.set_points(map_s_to_interp, map_y_to_interp);
+
+          vector<double> map_ss;
+          vector<double> map_xs;
+          vector<double> map_ys;
+
+          double _s = map_s_to_interp[0];
+
+          // 对地图曲线插值
+          while(_s < map_s_to_interp[map_s_to_interp.size() - 1]) {
+            double _x = x_given_s(_s);
+            double _y = y_given_s(_s);
+            map_ss.push_back(_s);
+            map_xs.push_back(_x);
+            map_ys.push_back(_y);
+            _s += 0.1;
+          }
+
+          vector<Planner> planners;
+          for (int i=0; i<3; i++) {
+            double _target_d = 2.0 + 4* i - 0.15;
+            Planner planner;
+            MatrixXd s_trajectories(6, 0);
+            VectorXd s_costs(0);
+            MatrixXd d_trajectories(6, 0);
+            VectorXd d_costs(0);
+
+            planner.s_trajectories = s_trajectories;
+            planner.s_costs = s_costs;
+            planner.d_trajectories = d_trajectories;
+            planner.d_costs = d_costs;
+            planner.target_d = _target_d;
+            planner.dist_to_target = 999.9;
+            planner.obstacle_following = false;
+            planner.feasible_traj_exist = true;
+            planner.minimal_cost = 9999999.9;
+            planner.optimal_s_id = 0;
+            planner.optimal_d_id = 0;
+            planner.iters = -1;
+            planners.push_back(planner);
+          }
+
+          // 近距离范围内的他车
+          vector<Vehicle> NearbyVehicles;
+          for (int i=0; i<sensor_fusion.size(); i++) {
+            // parsing the sensor fusion data
+            // id, x, y, vx, vy, s, d
+            double s_other = sensor_fusion[i][5];
+            double s_dist = s_other - car_s;
+            double d_other = sensor_fusion[i][6];
+            // NEARBY VEHICLES
+            double detect_range_front = 70.0;
+            double detect_range_backward = 20.0;
+
+            if ((s_dist < detect_range_front) && (s_dist >= - detect_range_backward) && (d_other > 0)) {
+              Vehicle vehicle;
+              vehicle.id = sensor_fusion[i][0];
+              vehicle.x  = sensor_fusion[i][1];
+              vehicle.y  = sensor_fusion[i][2];
+              vehicle.vx = sensor_fusion[i][3];
+              vehicle.vy = sensor_fusion[i][4];
+              vehicle.s  = sensor_fusion[i][5];
+              vehicle.d  = sensor_fusion[i][6];
+              vehicle.speed = sqrt(vehicle.vx * vehicle.vx + vehicle.vy * vehicle.vy);
+
+              NearbyVehicles.push_back(vehicle);
+            }
+          }
+
+          for (int i=0; i<NearbyVehicles.size(); i++) {
+            Vehicle _vehicle = NearbyVehicles[i];
+            for (int j=0; j<planners.size(); j++) {
+              if ((_vehicle.d > planners[j].target_d - 2) && (_vehicle.d <= planners[j].target_d + 2)) {
+
+                // frontmost obstacle
+                double from_ego_to_other = _vehicle.s - car_s;
+                if (j == mylane) {
+                  if (from_ego_to_other >= 3) {
+                    planners[j].obstacles.push_back(_vehicle);
+                  }
+                }
+                else {planners[j].obstacles.push_back(_vehicle);}
+
+                if (from_ego_to_other >= -1.0){
+                  if (from_ego_to_other < planners[j].dist_to_target) {
+                    planners[j].dist_to_target = from_ego_to_other;
+                    planners[j].target_to_follow = _vehicle;
+                  }
+                  if (from_ego_to_other <= 65) {
+                    planners[j].obstacle_following = true;
+                  }
+                }
+              }
+            }
+          }
+
+
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 

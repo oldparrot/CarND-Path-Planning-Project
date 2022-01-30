@@ -243,7 +243,10 @@ void spline::set_boundary(spline::bd_type left, double left_value,
     m_force_linear_extrapolation = force_linear_extrapolation;
 }
 
-// https://zhuanlan.zhihu.com/p/62860859
+/* 
+https://zhuanlan.zhihu.com/p/62860859 
+不同于知乎的地方在于这里m_i = c_i， 因此系数为1/3, 2/3, 1/3
+*/
 void spline::set_points(const std::vector<double> &x,
                         const std::vector<double> &y, bool cubic_spline) {
     assert(x.size() == y.size());
