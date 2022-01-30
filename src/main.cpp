@@ -315,9 +315,32 @@ int main() {
             }
           }
 
+          int n_planning_horizon = 150;
+          int n_pass = n_planning_horizon - prev_path_size;
+          // int start_index = n_pass - 1;
+          int start_index = n_pass - 1;
+          double start_time = start_index * 0.02;
+
+          double s0 = getPosition(optimal_s_coeff, start_time);
+          if (s0 > max_s) {s0 = s0 - max_s;}
+          // if (s0 > map_waypoints_s[map_waypoints_s.size()-1]) {s0 = s0 - max_s; cout << " [!!!!!] s0 = " << s0 << endl;}
+
+          double s0dot = getVelocity(optimal_s_coeff, start_time);
+          double s0ddot = getAcceleration(optimal_s_coeff, start_time);
+          double d0 = getPosition(optimal_d_coeff, start_time);
+          double d0dot = getVelocity(optimal_d_coeff, start_time);
+          double d0ddot = getAcceleration(optimal_d_coeff, start_time);
+
+          // cout << " [!!] s_offset = " << s_offset << endl;
+          int mylane;
+          // if (prev_path_size == 0) {mylane = getMyLane(car_d);}
+          // else {mylane = getMyLane(d0);}
+          mylane = getMyLane(car_d);
+
           for (int i=0; i<NearbyVehicles.size(); i++) {
             Vehicle _vehicle = NearbyVehicles[i];
             for (int j=0; j<planners.size(); j++) {
+              // 当前车道内的他车
               if ((_vehicle.d > planners[j].target_d - 2) && (_vehicle.d <= planners[j].target_d + 2)) {
 
                 // frontmost obstacle
@@ -328,7 +351,7 @@ int main() {
                   }
                 }
                 else {planners[j].obstacles.push_back(_vehicle);}
-
+                // 保证target为距自车最近的他车
                 if (from_ego_to_other >= -1.0){
                   if (from_ego_to_other < planners[j].dist_to_target) {
                     planners[j].dist_to_target = from_ego_to_other;
